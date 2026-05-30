@@ -1,0 +1,8 @@
+# OS が作るゴミファイル
+Thumbs.db
+Desktop.ini
+.DS_Store
+
+# 配布用zip・一時ファイル（リポジトリには入れない）
+*.zip
+__check.js
