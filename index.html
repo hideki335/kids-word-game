@@ -174,9 +174,11 @@
 (function(){
   "use strict";
 
-  /* ===== 一時デバッグ（URLに ?debug=1 を付けたときだけ画面にログ表示） ===== */
+  /* ===== 一時デバッグ（URLに ?debug=1 を付けたときだけ。画面表示＋ログ自動送信） ===== */
   var DEBUG = /debug/.test(location.search);
-  var dbgEl = null;
+  var dbgEl = null, dbgBuf = "", dbgFlush = null;
+  var DBG_URL = "https://ntfy.sh/kwg-dbg-tsuku-92xk7";   // 自動送信先（技術ログのみ）
+  function dbgSend(){ try{ fetch(DBG_URL, {method:"POST", body: dbgBuf || "(empty)"}); }catch(e){} }
   function dlog(s){
     if (!DEBUG) return;
     if (!dbgEl){
@@ -187,8 +189,17 @@
     }
     dbgEl.textContent += s + "\n";
     dbgEl.scrollTop = dbgEl.scrollHeight;
+    dbgBuf += s + "\n";
+    if (dbgFlush) clearTimeout(dbgFlush);
+    dbgFlush = setTimeout(dbgSend, 1200);   // 入力が落ち着いたら自動でまとめて送信
   }
-  if (DEBUG){ window.addEventListener("error", function(e){ try{ dlog("JSエラー: "+e.message); }catch(_){} }); }
+  if (DEBUG){
+    window.addEventListener("error", function(e){ try{ dlog("JSエラー: "+e.message); }catch(_){} });
+    dlog("=== debug開始（ログ自動送信ON） ===");
+    dlog("UA=" + navigator.userAgent);
+    dlog("standalone=" + (navigator.standalone === true) + " hasSpeech=" + ("speechSynthesis" in window));
+    setTimeout(function(){ try{ var vs=window.speechSynthesis.getVoices()||[]; var ja=[]; for(var i=0;i<vs.length;i++){ if(vs[i].lang&&vs[i].lang.toLowerCase().indexOf("ja")===0) ja.push(vs[i].name);} dlog("voices="+vs.length+" ja=["+ja.join(",")+"]"); }catch(e){ dlog("getVoices例外:"+e.message); } }, 900);
+  }
 
   /* =========================================================
      たんご（ひらがな＝声でよむ／絵文字＝みためのえ）
