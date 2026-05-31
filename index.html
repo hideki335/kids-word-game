@@ -313,7 +313,10 @@
     lastSpeak = now;
     try {
       var synth = window.speechSynthesis;
-      synth.cancel();                 // 直前のことばを止めて最新を読む
+      // iOS対策：いちばん最初の発話より前に cancel() を呼ぶと、ユーザー操作による
+      // 音声の「解錠」が行われず、以後ずっと無音のままになる不具合がある。
+      // そのため「すでに喋っている／待機中のときだけ」止めて最新語に差し替える。
+      if (synth.speaking || synth.pending) synth.cancel();
       if (synth.paused) synth.resume(); // Chromeで一時停止状態に陥るのを回復
       var u = new SpeechSynthesisUtterance(text);
       u.lang = "ja-JP";
