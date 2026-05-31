@@ -174,6 +174,22 @@
 (function(){
   "use strict";
 
+  /* ===== 一時デバッグ（URLに ?debug=1 を付けたときだけ画面にログ表示） ===== */
+  var DEBUG = /debug/.test(location.search);
+  var dbgEl = null;
+  function dlog(s){
+    if (!DEBUG) return;
+    if (!dbgEl){
+      dbgEl = document.createElement("div");
+      dbgEl.style.cssText = "position:fixed;left:0;top:0;right:0;max-height:46%;overflow:auto;z-index:99999;"+
+        "background:rgba(0,0,0,.82);color:#5fffa0;font:12px/1.45 monospace;white-space:pre-wrap;padding:6px;pointer-events:none;";
+      document.body.appendChild(dbgEl);
+    }
+    dbgEl.textContent += s + "\n";
+    dbgEl.scrollTop = dbgEl.scrollHeight;
+  }
+  if (DEBUG){ window.addEventListener("error", function(e){ try{ dlog("JSエラー: "+e.message); }catch(_){} }); }
+
   /* =========================================================
      たんご（ひらがな＝声でよむ／絵文字＝みためのえ）
      どうぶつ・たべもの・のりもの をミックス
@@ -307,16 +323,17 @@
   }
 
   function speak(text){
-    if (muted || !canSpeak) return;
+    if (muted || !canSpeak){ dlog("speak skip: muted="+muted+" canSpeak="+canSpeak); return; }
     var now = Date.now();
-    if (now - lastSpeak < SPEAK_THROTTLE) return;   // 速すぎる連打は間引く
+    if (now - lastSpeak < SPEAK_THROTTLE){ dlog("speak skip: throttle ("+(now-lastSpeak)+"ms)"); return; }
     lastSpeak = now;
     try {
       var synth = window.speechSynthesis;
+      dlog("speak('"+text+"') 前: speaking="+synth.speaking+" pending="+synth.pending+" paused="+synth.paused+" ac="+(ac?ac.state:"null")+" voice="+(jaVoice?jaVoice.name:"なし"));
       // iOS対策：いちばん最初の発話より前に cancel() を呼ぶと、ユーザー操作による
       // 音声の「解錠」が行われず、以後ずっと無音のままになる不具合がある。
       // そのため「すでに喋っている／待機中のときだけ」止めて最新語に差し替える。
-      if (synth.speaking || synth.pending) synth.cancel();
+      if (synth.speaking || synth.pending){ synth.cancel(); dlog("  cancel()した"); }
       if (synth.paused) synth.resume(); // Chromeで一時停止状態に陥るのを回復
       var u = new SpeechSynthesisUtterance(text);
       u.lang = "ja-JP";
@@ -324,8 +341,13 @@
       u.rate = 0.85;   // ゆっくりめ
       u.pitch = 1.25;  // すこし高め＝やさしい印象
       u.volume = 1.0;
+      u.onstart = function(){ dlog("  ▶ onstart 発話開始"); };
+      u.onend   = function(){ dlog("  ■ onend 発話終了"); };
+      u.onerror = function(e){ dlog("  ✗ onerror: "+(e&&e.error?e.error:"?")); };
       synth.speak(u);
-    } catch(e){ /* 読み上げ非対応でも続行 */ }
+      dlog("  synth.speak() 呼んだ");
+      setTimeout(function(){ dlog("  400ms後: speaking="+synth.speaking+" pending="+synth.pending); }, 400);
+    } catch(e){ dlog("  例外: "+e.message); /* 読み上げ非対応でも続行 */ }
   }
 
   /* =========================================================
@@ -506,7 +528,9 @@
   kickIdle();
 
   function onDown(e){
+    dlog("--- tap (type="+e.type+") ---");
     ensureAudio();             // 最初のタッチで音を有効化（iOS対策）
+    dlog("ensureAudio後: ac="+(ac?ac.state:"null"));
     hideHint();
     kickIdle();
 
