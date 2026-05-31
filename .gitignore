@@ -6,3 +6,10 @@ Desktop.ini
 # 配布用zip・一時ファイル（リポジトリには入れない）
 *.zip
 __check.js
+
+# wrangler files
+.wrangler
+.dev.vars*
+!.dev.vars.example
+.env*
+!.env.example
