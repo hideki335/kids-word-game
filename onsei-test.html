@@ -1,0 +1,125 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no, viewport-fit=cover">
+<title>読み上げ 診断テスト</title>
+<style>
+  body{ font-family:-apple-system,"Hiragino Sans","Hiragino Maru Gothic ProN",sans-serif;
+        margin:0; padding:14px; background:#10204a; color:#fff; }
+  h1{ font-size:19px; margin:.2em 0 .4em; }
+  p.info{ font-size:13px; color:#bcd; line-height:1.5; }
+  button{ display:block; width:100%; margin:9px 0; padding:16px; font-size:17px; font-weight:700;
+          border:none; border-radius:12px; background:#ffd54a; color:#222; -webkit-appearance:none; }
+  button.repro{ background:#ff8a3d; }
+  button.fix{ background:#5ac85a; color:#fff; }
+  button.util{ background:#3db8ff; color:#fff; font-size:15px; padding:12px; }
+  #log{ margin-top:12px; padding:10px; background:#000; color:#5fffa0; font-size:13px;
+        white-space:pre-wrap; word-break:break-all; border-radius:8px; min-height:220px; line-height:1.45; }
+</style>
+</head>
+<body>
+  <h1>🔊 読み上げ 診断テスト</h1>
+  <p class="info">
+    <b>①から順番に</b>押してください。それぞれ「<b>声（こえ）が聞こえたか</b>」を覚えておいてください。<br>
+    黒い欄に状態が出ます（最後にこの中身を教えてください）。
+  </p>
+
+  <button id="t1">① 声だけ（効果音なし）</button>
+  <button id="t2">② 効果音を“動かしたまま”声（ピッは鳴らさない）</button>
+  <button id="t3" class="repro">③ ピッ → すぐ声（いまのゲームと同じ作り）</button>
+  <button id="t4" class="fix">④ ピッ → 止めて → 声（修正案）</button>
+  <button id="tv" class="util">⑤ 使える声の一覧を表示</button>
+  <button id="clr" class="util">ログを消す</button>
+
+  <div id="log"></div>
+
+<script>
+(function(){
+  "use strict";
+  var logEl = document.getElementById("log");
+  function log(s){ logEl.textContent += s + "\n"; logEl.scrollTop = logEl.scrollHeight; }
+  function ts(){ try{ return (new Date()).toTimeString().slice(0,8); }catch(e){ return ""; } }
+
+  var canSpeak = ("speechSynthesis" in window) && ("SpeechSynthesisUtterance" in window);
+  log("speechSynthesis 対応: " + (canSpeak ? "YES" : "NO"));
+  var AC = window.AudioContext || window.webkitAudioContext;
+  log("Web Audio 対応: " + (AC ? "YES" : "NO"));
+
+  function listVoices(){
+    if(!canSpeak){ log("× speechSynthesis 非対応"); return; }
+    var vs = window.speechSynthesis.getVoices() || [];
+    log("声の数: " + vs.length);
+    var ja = [];
+    for(var i=0;i<vs.length;i++){
+      if(vs[i].lang && vs[i].lang.toLowerCase().indexOf("ja")===0) ja.push(vs[i].name+" ["+vs[i].lang+"]");
+    }
+    log("日本語の声: " + (ja.length ? ja.join(" / ") : "なし（lang=ja-JP で読ませます）"));
+  }
+  if(canSpeak){
+    window.speechSynthesis.onvoiceschanged = function(){ log("[voiceschanged] 声が読み込まれました"); };
+  }
+
+  function doSpeak(label){
+    if(!canSpeak){ log("  × speechSynthesis 非対応のため話せません"); return; }
+    var synth = window.speechSynthesis;
+    log("  speak前: speaking="+synth.speaking+" pending="+synth.pending+" paused="+synth.paused);
+    try{
+      var u = new SpeechSynthesisUtterance("こんにちは、こえの テストです");
+      u.lang = "ja-JP"; u.rate = 0.9; u.pitch = 1.2; u.volume = 1.0;
+      u.onstart = function(){ log("  ▶ onstart（話し始めた）"); };
+      u.onend   = function(){ log("  ■ onend（話し終わり）"); };
+      u.onerror = function(e){ log("  ✗ onerror: " + (e && e.error ? e.error : "?")); };
+      synth.speak(u);
+      log("  speak() 呼んだ ("+label+")");
+      setTimeout(function(){ log("  400ms後: speaking="+synth.speaking+" pending="+synth.pending); }, 400);
+    }catch(e){ log("  例外: " + e.message); }
+  }
+
+  var ac = null;
+  function ensureCtx(){
+    if(!ac){ if(!AC){ log("  × Web Audio 非対応"); return null; } ac = new AC(); log("  AudioContext 作成"); }
+    return ac;
+  }
+  function beep(){
+    var c = ensureCtx(); if(!c) return;
+    if(c.state!=="running"){ try{ c.resume(); }catch(e){} }
+    var t=c.currentTime, o=c.createOscillator(), g=c.createGain();
+    o.type="triangle";
+    o.frequency.setValueAtTime(440,t); o.frequency.exponentialRampToValueAtTime(900,t+0.1);
+    g.gain.setValueAtTime(0.0001,t); g.gain.exponentialRampToValueAtTime(0.5,t+0.02);
+    g.gain.exponentialRampToValueAtTime(0.0001,t+0.26);
+    o.connect(g); g.connect(c.destination); o.start(t); o.stop(t+0.3);
+    log("  ピッ 鳴らした (ctx state="+c.state+")");
+  }
+
+  document.getElementById("t1").onclick = function(){
+    log("===① 声だけ（効果音なし）===");
+    if(ac && ac.state==="running"){ try{ ac.suspend(); log("  既存ctxをsuspend"); }catch(e){} }
+    doSpeak("①");
+  };
+  document.getElementById("t2").onclick = function(){
+    log("===② ctxを動かしたまま声（ピッ無し）===");
+    var c=ensureCtx(); if(c){ if(c.state!=="running"){ try{ c.resume(); }catch(e){} } log("  ctx state="+c.state); }
+    doSpeak("②");
+  };
+  document.getElementById("t3").onclick = function(){
+    log("===③ ピッ→すぐ声（現状の作り）===");
+    beep(); doSpeak("③");
+  };
+  document.getElementById("t4").onclick = function(){
+    log("===④ ピッ→止めて→声（修正案）===");
+    beep();
+    setTimeout(function(){
+      if(ac){ try{ ac.suspend(); log("  ctx suspend"); }catch(e){} }
+      doSpeak("④");
+    }, 350);
+  };
+  document.getElementById("tv").onclick = function(){ log("===⑤ 声の一覧==="); listVoices(); };
+  document.getElementById("clr").onclick = function(){ logEl.textContent=""; };
+
+  log("準備OK。①から順に押してください。");
+})();
+</script>
+</body>
+</html>
